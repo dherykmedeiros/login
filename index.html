@@ -112,7 +112,7 @@
 
     <script>
         // Inicialize o cliente Supabase
-        const {createClient} = supabase
+        const {createClient} = supabase;
         const supabaseUrl = 'https://prxrvgdhubjtekrxjhbk.supabase.co';
         const supabaseKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InByeHJ2Z2RodWJqdGVrcnhqaGJrIiwicm9sZSI6ImFub24iLCJpYXQiOjE3MjY1MjA1NjMsImV4cCI6MjA0MjA5NjU2M30.7rC9j4S4AAaji7vMGyewz3XwRS_GZxu39degf1fqyTc';
         const _supabase = createClient(supabaseUrl, supabaseKey);
@@ -142,59 +142,62 @@
             loginDiv.style.display = 'block';
         });
 
+        // Função de login, agora consultando diretamente a tabela 'data'
         loginForm.addEventListener('submit', async (e) => {
             e.preventDefault();
             const email = document.getElementById('loginEmail').value;
             const password = document.getElementById('loginPassword').value;
-            
-            try {
-                const { data, error } = await _supabase.auth.signInWithPassword({
-                    email: email,
-                    password: password,
-                });
 
-                if (error) throw error;
-                console.log('Login bem-sucedido:', data);
+            try {
+                // Consulta a tabela 'data' para verificar o usuário
+                const { data: user, error } = await _supabase
+                    .from('data')
+                    .select('*')
+                    .eq('email', email)
+                    .eq('password', password)
+                    .single();
+
+                if (error || !user) {
+                    throw new Error('Usuário ou senha inválidos.');
+                }
+
+                console.log('Login bem-sucedido:', user);
                 loginError.textContent = '';
-                showWelcome(data.user);
+                showWelcome(user);
             } catch (error) {
                 console.error('Erro no login:', error.message);
                 loginError.textContent = 'Erro no login: ' + error.message;
             }
         });
 
+        // Função de cadastro, agora inserindo diretamente na tabela 'data'
         registerForm.addEventListener('submit', async (e) => {
             e.preventDefault();
             const name = document.getElementById('registerName').value;
             const email = document.getElementById('registerEmail').value;
             const password = document.getElementById('registerPassword').value;
-            
-            try {
-                // Registrar o usuário no Supabase
-                const { data: authData, error: authError } = await _supabase.auth.signUp({
-                    email: email,
-                    password: password,
-                    options: {
-                        data: {
-                            name: name,
-                        }
-                    }
-                });
 
-                if (authError) throw authError;
-                console.log('Registro bem-sucedido:', authData);
+            try {
+                // Verifica se o usuário já existe
+                const { data: existingUser, error: userError } = await _supabase
+                    .from('data')
+                    .select('*')
+                    .eq('email', email)
+                    .single();
+
+                if (existingUser) {
+                    throw new Error('Usuário já cadastrado.');
+                }
 
                 // Inserir os dados na tabela 'data'
                 const { error: insertError } = await _supabase
-                    .from('data')  // Tabela onde você vai inserir os dados
-                    .insert([
-                        { name: name, email: email }  // Aqui você insere os dados
-                    ]);
+                    .from('data')
+                    .insert([{ name: name, email: email, password: password }]);
 
                 if (insertError) throw insertError;
 
                 registerError.textContent = '';
-                registerSuccess.textContent = 'Registro bem-sucedido! Por favor, verifique seu e-mail para confirmar sua conta.';
+                registerSuccess.textContent = 'Cadastro bem-sucedido!';
                 setTimeout(() => {
                     showLogin();
                     registerSuccess.textContent = '';
@@ -206,41 +209,23 @@
             }
         });
 
-        logoutButton.addEventListener('click', async () => {
-            try {
-                const { error } = await _supabase.auth.signOut();
-                if (error) throw error;
-                welcomeDiv.style.display = 'none';
-                loginDiv.style.display = 'block';
-                loginForm.reset();
-            } catch (error) {
-                console.error('Erro ao fazer logout:', error.message);
-                alert('Erro ao fazer logout: ' + error.message);
-            }
+        logoutButton.addEventListener('click', () => {
+            welcomeDiv.style.display = 'none';
+            loginDiv.style.display = 'block';
+            loginForm.reset();
         });
 
         function showWelcome(user) {
             loginDiv.style.display = 'none';
             registerDiv.style.display = 'none';
             welcomeDiv.style.display = 'block';
-            welcomeMessage.textContent = `Olá, ${user.user_metadata.name || user.email}!`;
+            welcomeMessage.textContent = `Olá, ${user.name}!`;
         }
 
         function showLogin() {
             registerDiv.style.display = 'none';
             loginDiv.style.display = 'block';
         }
-
-        // Verificar o estado da sessão ao carregar a página
-        _supabase.auth.onAuthStateChange((event, session) => {
-            if (event === 'SIGNED_IN' && session) {
-                showWelcome(session.user);
-            } else {
-                loginDiv.style.display = 'block';
-                registerDiv.style.display = 'none';
-                welcomeDiv.style.display = 'none';
-            }
-        });
     </script>
 </body>
 </html>
